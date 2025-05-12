@@ -1,61 +1,68 @@
-from flask import Flask, request, render_template, jsonify
-from datetime import datetime
-import sqlite3
+from flask import Flask, render_template, request, redirect, url_for
+import psycopg
 import os
+from urllib.parse import urlparse
 
 app = Flask(__name__)
 
+# 🔐 Lire l'URL de la base depuis la variable d'environnement (Render la fournit automatiquement)
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
 def get_db_connection():
-    conn = sqlite3.connect('expenses.db')
-    conn.row_factory = sqlite3.Row
-    return conn
+    # Parse DATABASE_URL en éléments pour psycopg
+    result = urlparse(DATABASE_URL)
+    username = result.username
+    password = result.password
+    database = result.path[1:]
+    hostname = result.hostname
+    port = result.port
 
+    return psycopg.connect(
+        dbname=database,
+        user=username,
+        password=password,
+        host=hostname,
+        port=port
+    )
 
-# Crée la table si elle n'existe pas
+# 🔧 Créer la table si elle n'existe pas encore
 with get_db_connection() as conn:
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS expenses (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            amount REAL,
-            category TEXT,
-            description TEXT,
-            date TEXT
-        )
-    ''')
-    conn.commit()
-
+    with conn.cursor() as cur:
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS expenses (
+                id SERIAL PRIMARY KEY,
+                amount REAL,
+                category TEXT,
+                description TEXT,
+                date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        conn.commit()
 
 @app.route('/')
 def index():
-    return render_template('index.html')
-
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute('SELECT * FROM expenses ORDER BY date DESC')
+            expenses = cur.fetchall()
+    return render_template('index.html', expenses=expenses)
 
 @app.route('/add', methods=['POST'])
-def add_expense():
-    data = request.get_json()
-    amount = data.get('amount')
-    category = data.get('category')
-    description = data.get('description')
-    date = datetime.now().strftime("%Y-%m-%d")
+def add():
+    amount = request.form['amount']
+    category = request.form['category']
+    description = request.form['description']
 
     with get_db_connection() as conn:
-        conn.execute('''
-            INSERT INTO expenses (amount, category, description, date)
-            VALUES (?, ?, ?, ?)
-        ''', (amount, category, description, date))
-        conn.commit()
+        with conn.cursor() as cur:
+            cur.execute('''
+                INSERT INTO expenses (amount, category, description)
+                VALUES (%s, %s, %s)
+            ''', (amount, category, description))
+            conn.commit()
+    return redirect(url_for('index'))
 
-    return jsonify({"message": "Dépense ajoutée avec succès !"})
-
-
-@app.route('/expenses')
-def get_expenses():
-    with get_db_connection() as conn:
-        expenses = conn.execute('SELECT * FROM expenses ORDER BY date DESC').fetchall()
-        return jsonify([dict(expense) for expense in expenses])
-
-
+# 🔁 Déploiement Render
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(debug=False, host='0.0.0.0', port=port)
