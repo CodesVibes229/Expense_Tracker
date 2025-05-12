@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Suivi des Dépenses</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Suivi de Dépenses 💸</h1>
+
+        <form id="expense-form">
+            <input type="number" id="amount" placeholder="Montant (€)" required>
+            <input type="text" id="category" placeholder="Catégorie" required>
+            <input type="text" id="description" placeholder="Description" required>
+            <button type="submit">Ajouter</button>
+        </form>
+
+        <h2>Historique</h2>
+        <ul id="expense-list"></ul>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>
